@@ -57,7 +57,7 @@ func matchstar(c byte, regexp, text []byte) bool {
 
 // assumes input is correct
 func main() {
-	regexp := "da*b"
-	text := "bcccb"
+	regexp := "abc$"
+	text := "abcb"
 	fmt.Println(match([]byte(regexp), []byte(text)))
 }
