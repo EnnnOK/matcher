@@ -1,8 +1,11 @@
 package main
 
 import (
+	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
 )
 
 /*
@@ -294,9 +297,18 @@ func printnfa(s *state) {
 	}
 }
 func main() {
-	regexp := `abc`
+	// regexp := `abc`
+	// chars := lex(regexp)
+	// chars = postfix(chars)
+	// nfa := post2nfa(chars)
+	// fmt.Println(matchregex(nfa, "ab"))
+	inSrc, _ := ioutil.ReadAll(os.Stdin)
+	source := string(inSrc)
+	flag.Parse()
+	regexp := flag.Arg(0)
+
 	chars := lex(regexp)
 	chars = postfix(chars)
 	nfa := post2nfa(chars)
-	fmt.Println(matchregex(nfa, "ab"))
+	fmt.Println(matchregex(nfa, source))
 }
