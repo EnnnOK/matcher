@@ -297,11 +297,6 @@ func printnfa(s *state) {
 	}
 }
 func main() {
-	// regexp := `abc`
-	// chars := lex(regexp)
-	// chars = postfix(chars)
-	// nfa := post2nfa(chars)
-	// fmt.Println(matchregex(nfa, "ab"))
 	inSrc, _ := ioutil.ReadAll(os.Stdin)
 	source := string(inSrc)
 	flag.Parse()
