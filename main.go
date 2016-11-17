@@ -14,36 +14,18 @@ import (
 */
 
 const (
-	eof charType = iota
+	charNil charType = iota
 	charEscapeLiteral
 	charLiteral
 	charDot
 	charBegin
 	charEnd
 	charStar
+	charConcat
 )
 
+//go:generate stringer -type=charType
 type charType int
-
-func (t charType) String() string {
-	switch t {
-	case eof:
-		return "EOF"
-	case charEscapeLiteral:
-		return "ESCAPE"
-	case charLiteral:
-		return "LITERAL"
-	case charDot:
-		return "DOT"
-	case charBegin:
-		return "BEGIN"
-	case charEnd:
-		return "END"
-	case charStar:
-		return "STAR"
-	}
-	return ""
-}
 
 type char struct {
 	typ charType
@@ -104,6 +86,9 @@ func (l *lexer) emit(t charType) {
 			log.Fatalln("Preceding token to star is not quantifiable")
 		}
 	}
+	if t != charStar {
+		l.chars = append(l.chars, char{charConcat, '.'})
+	}
 	l.chars = append(l.chars, char{t, c})
 }
 
@@ -143,64 +128,175 @@ func (l *lexer) next() bool {
 }
 
 func lex(expression string) []char {
+	if len(expression) == 0 {
+		return []char{}
+	}
 	l := &lexer{
 		expression: expression,
 		chars:      make([]char, 0, len(expression)),
 	}
 	l.run()
-	return l.chars
+	return l.chars[1:]
 }
 
-// /* match: search for regexp anywhere in text */
-// func match(regexp, text []byte) bool {
-// 	if regexp[0] == '^' {
-// 		return matchhere(regexp[1:], text)
-// 	}
-// 	for i := range text {
-// 		if matchhere(regexp, text[i:]) {
-// 			return true
-// 		}
-// 	}
-// 	return false
-// }
+func postfix(chars []char) []char {
+	output := []char{}
+	operator := []char{}
+	pop := func() *char {
+		if len(operator) > 0 {
+			c := &operator[len(operator)-1]
+			operator = operator[:len(operator)-1]
+			return c
+		}
+		return nil
+	}
+	for _, c := range chars {
+		switch c.typ {
+		case charConcat:
+			if t := pop(); t != nil {
+				output = append(output, *t)
+			}
+			operator = append(operator, c)
+		default:
+			output = append(output, c)
+		}
+	}
+	output = append(output, operator...)
+	return output
+}
 
-// /* matchhere: search for regexp at beginning of text */
-// func matchhere(regexp, text []byte) bool {
-// 	if len(regexp) == 0 {
-// 		return true
-// 	}
-// 	if len(regexp) > 1 && regexp[1] == '*' {
-// 		return matchstar(regexp[0], regexp[2:], text)
-// 	}
-// 	if regexp[0] == '$' && len(regexp) == 1 {
-// 		return len(text) == 0
-// 	}
-// 	if len(text) != 0 && (regexp[0] == '.' || regexp[0] == text[0]) {
-// 		return matchhere(regexp[1:], text[1:])
-// 	}
-// 	return false
-// }
+//go:generate stringer -type=styp
+type styp int
 
-// /* matchstar: search for c*regexp at beginning of text */
-// func matchstar(c byte, regexp, text []byte) bool {
-// 	i := 0
-// 	for {
-// 		if matchhere(regexp, text[i:]) {
-// 			return true
-// 		}
-// 		if i == len(text) || (text[i] != c && c != '.') {
-// 			break
-// 		}
-// 		i++
-// 	}
-// 	return false
-// }
+const (
+	match styp = iota
+	split
+	single
+)
 
-// assumes input is correct
+type state struct {
+	typ      styp
+	c        char
+	out      []*state
+	lastlist int // list generation number
+}
+
+func (s state) String() string {
+	return fmt.Sprintf("{typ: %s, c: %s, out: %p}", s.typ, s.c, s.out)
+}
+
+type frag struct {
+	start *state
+	out   []ptr
+}
+
+type ptr struct {
+	s *state
+	i int
+}
+
+func patch(out []ptr, start *state) {
+	var p ptr
+	for i := len(out) - 1; i >= 0; i-- {
+		p, out = out[len(out)-1], out[:len(out)-1]
+		index := p.i
+		p.s.out[index] = start
+	}
+}
+
+func post2nfa(postfix []char) (start *state) {
+	stack := []frag{}
+	push := func(f frag) {
+		stack = append(stack, f)
+	}
+	pop := func() (f frag) {
+		f, stack = stack[len(stack)-1], stack[:len(stack)-1]
+		return
+	}
+	for _, p := range postfix {
+		switch p.typ {
+		default:
+			s := &state{typ: single, c: p, out: []*state{nil}}
+			out := []ptr{{s, 0}}
+			push(frag{s, out})
+		case charConcat:
+			e2 := pop()
+			e1 := pop()
+			patch(e1.out, e2.start)
+			push(frag{e1.start, e2.out})
+		case charStar:
+			e := pop()
+			s := &state{typ: split, out: []*state{e.start, nil}}
+			patch(e.out, s)
+			out := []ptr{{s, 1}}
+			push(frag{s, out})
+		}
+	}
+	e := pop()
+	patch(e.out, &state{typ: match})
+	return e.start
+}
+
+func addstate(list *[]*state, s *state, listid int) {
+	if s.lastlist == listid {
+		return
+	}
+	s.lastlist = listid
+	if s.typ == split {
+		addstate(list, s.out[0], listid)
+		addstate(list, s.out[1], listid)
+		return
+	}
+	*list = append(*list, s)
+}
+
+func matchregex(start *state, source string) bool {
+	listid := 1
+	list := []*state{}
+	addstate(&list, start, listid)
+
+	for i := range source {
+		c := source[i]
+		list, listid = step(list, c, listid)
+	}
+	return ismatch(list)
+}
+
+func step(list []*state, c byte, listid int) ([]*state, int) {
+	nlist := []*state{}
+	listid++
+	for _, s := range list {
+		if s.typ == single && s.c.val == c {
+			addstate(&nlist, s.out[0], listid)
+		}
+	}
+	return nlist, listid
+}
+
+func ismatch(list []*state) bool {
+	for _, s := range list {
+		if s.typ == match {
+			return true
+		}
+	}
+	return false
+}
+
+func printnfa(s *state) {
+	fmt.Println(s)
+	switch s.typ {
+	case single:
+		printnfa(s.out[0])
+	case split:
+		printnfa(s.out[1])
+	case match:
+		return
+	}
+}
 func main() {
-	regexp := `aa*`
-	// text := "abcb"
-	// fmt.Println(match([]byte(regexp), []byte(text)))
+	regexp := `abc`
 	chars := lex(regexp)
-	fmt.Println(chars)
+	chars = postfix(chars)
+	nfa := post2nfa(chars)
+	fmt.Println(matchregex(nfa, "ab"))
 }
