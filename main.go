@@ -198,6 +198,13 @@ type ptr struct {
 	i int
 }
 
+type dfastate struct {
+	list *[]*state
+	next [256]*dfastate
+}
+
+var cacheddfa map[*[]*state]*dfastate
+
 func patch(out []ptr, start *state) {
 	var p ptr
 	for i := len(out) - 1; i >= 0; i-- {
@@ -254,15 +261,25 @@ func addstate(list *[]*state, s *state, listid int) {
 }
 
 func matchregex(start *state, source string) bool {
+	cacheddfa = make(map[*[]*state]*dfastate)
+
 	listid := 1
 	list := []*state{}
 	addstate(&list, start, listid)
+	d := getdfastate(&list)
+	var next *dfastate
 
 	for i := range source {
 		c := source[i]
-		list, listid = step(list, c, listid)
+		next = d.next[c]
+		if next == nil {
+			list, listid = step(list, c, listid)
+			d.next[c] = getdfastate(&list)
+			next = d.next[c]
+		}
+		d = next
 	}
-	return ismatch(list)
+	return ismatch(*d.list)
 }
 
 func step(list []*state, c byte, listid int) ([]*state, int) {
@@ -274,6 +291,16 @@ func step(list []*state, c byte, listid int) ([]*state, int) {
 		}
 	}
 	return nlist, listid
+}
+
+func getdfastate(list *[]*state) *dfastate {
+	d := cacheddfa[list]
+	if d != nil {
+		return d
+	}
+	d = &dfastate{list: list}
+	cacheddfa[list] = d
+	return d
 }
 
 func ismatch(list []*state) bool {
