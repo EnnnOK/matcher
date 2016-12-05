@@ -269,7 +269,7 @@ func step(list []*state, c byte, listid int) ([]*state, int) {
 	nlist := []*state{}
 	listid++
 	for _, s := range list {
-		if s.typ == single && s.c.val == c {
+		if s.typ == single && s.c.val == c || s.c.typ == charDot {
 			addstate(&nlist, s.out[0], listid)
 		}
 	}
