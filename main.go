@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"io/ioutil"
 	"log"
 	"os"
 )
@@ -11,9 +10,8 @@ import (
 /*
 	c	matches any literal character c
 	.	matches any single character
-	^	matches the beginning of the input string
-	$	matches the end of the input string
 	*	matches zero or more occurrences of the previous character
+	|	matches the previous character or the next character
 */
 
 const (
@@ -21,10 +19,9 @@ const (
 	charEscapeLiteral
 	charLiteral
 	charDot
-	charBegin
-	charEnd
 	charStar
 	charConcat
+	charOr
 )
 
 //go:generate stringer -type=charType
@@ -52,12 +49,10 @@ func (l *lexer) run() {
 			l.emit(charEscapeLiteral)
 		case '.':
 			l.emit(charDot)
-		case '^':
-			l.emit(charBegin)
-		case '$':
-			l.emit(charEnd)
 		case '*':
 			l.emit(charStar)
+		case '|':
+			l.emit(charOr)
 		default:
 			l.emit(charLiteral)
 		}
@@ -83,13 +78,13 @@ func (l *lexer) emit(t charType) {
 			log.Fatalln("cannot have a trailing backslash in regular expression")
 		}
 	}
+	top := l.top()
 	if t == charStar {
-		top := l.top()
 		if top == nil || (top.typ != charLiteral && top.typ != charDot) {
 			log.Fatalln("Preceding token to star is not quantifiable")
 		}
 	}
-	if t != charStar {
+	if t != charStar && t != charOr && (top == nil || top.typ != charOr) {
 		l.chars = append(l.chars, char{charConcat, '.'})
 	}
 	l.chars = append(l.chars, char{t, c})
@@ -146,25 +141,46 @@ func postfix(chars []char) []char {
 	output := []char{}
 	operator := []char{}
 	pop := func() *char {
+		c := &operator[len(operator)-1]
+		operator = operator[:len(operator)-1]
+		return c
+	}
+	top := func() *char {
 		if len(operator) > 0 {
 			c := &operator[len(operator)-1]
-			operator = operator[:len(operator)-1]
 			return c
 		}
 		return nil
 	}
 	for _, c := range chars {
 		switch c.typ {
+		case charStar:
+			if t := top(); t != nil {
+				if t.typ == charStar {
+					output = append(output, *pop())
+				}
+			}
+			operator = append(operator, c)
 		case charConcat:
-			if t := pop(); t != nil {
-				output = append(output, *t)
+			if t := top(); t != nil {
+				if t.typ == charConcat || t.typ == charStar {
+					output = append(output, *pop())
+				}
+			}
+			operator = append(operator, c)
+		case charOr:
+			if t := top(); t != nil {
+				output = append(output, *pop())
 			}
 			operator = append(operator, c)
 		default:
 			output = append(output, c)
 		}
 	}
-	output = append(output, operator...)
+	oplen := len(operator)
+	for i := 0; i < oplen; i++ {
+		output = append(output, *pop())
+	}
 	return output
 }
 
@@ -193,9 +209,17 @@ type frag struct {
 	out   []ptr
 }
 
+func (f frag) String() string {
+	return fmt.Sprintf("{start: %v, out: %v}", *f.start, f.out)
+}
+
 type ptr struct {
 	s *state
 	i int
+}
+
+func (p ptr) String() string {
+	return fmt.Sprintf("{s: %v, i: %d}", *p.s, p.i)
 }
 
 type dfastate struct {
@@ -239,6 +263,12 @@ func post2nfa(postfix []char) (start *state) {
 			s := &state{typ: split, out: []*state{e.start, nil}}
 			patch(e.out, s)
 			out := []ptr{{s, 1}}
+			push(frag{s, out})
+		case charOr:
+			e2 := pop()
+			e1 := pop()
+			s := &state{typ: split, out: []*state{e1.start, e2.start}}
+			out := append(e1.out, e2.out...)
 			push(frag{s, out})
 		}
 	}
@@ -324,10 +354,13 @@ func printnfa(s *state) {
 	}
 }
 func main() {
-	inSrc, _ := ioutil.ReadAll(os.Stdin)
-	source := string(inSrc)
 	flag.Parse()
 	regexp := flag.Arg(0)
+	source := flag.Arg(1)
+	if source == "" || regexp == "" {
+		fmt.Println("usage: matcher regexp source...")
+		os.Exit(1)
+	}
 
 	chars := lex(regexp)
 	chars = postfix(chars)
