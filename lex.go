@@ -13,6 +13,8 @@ const (
 	charStar
 	charConcat
 	charOr
+	charBegin
+	charEnd
 )
 
 //go:generate stringer -type=charType
@@ -44,6 +46,10 @@ func (l *lexer) run() {
 			l.emit(charStar)
 		case '|':
 			l.emit(charOr)
+		case '^':
+			l.emit(charBegin)
+		case '$':
+			l.emit(charEnd)
 		default:
 			l.emit(charLiteral)
 		}
@@ -58,6 +64,10 @@ func (l *lexer) top() *char {
 		return &l.chars[len(l.chars)-1]
 	}
 	return nil
+}
+
+func operator(t charType) bool {
+	return t == charStar || t == charOr
 }
 
 // emit validates and appends the concatenated characters
@@ -77,7 +87,7 @@ func (l *lexer) emit(t charType) {
 			log.Fatalln("Preceding token to star is not quantifiable")
 		}
 	}
-	if t != charStar && t != charOr && (top == nil || top.typ != charOr) {
+	if !operator(t) && (top == nil || top.typ != charOr && top.typ != charBegin && top.typ != charEnd) {
 		l.chars = append(l.chars, char{charConcat, '.'})
 	}
 	l.chars = append(l.chars, char{t, c})

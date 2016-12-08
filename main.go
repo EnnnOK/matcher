@@ -133,21 +133,6 @@ func post2nfa(postfix []char) (start *state) {
 	return e.start
 }
 
-// addstate a new unique state to the list, following
-// any unlabeled arrows along the way.
-func addstate(list *[]*state, s *state, listid int) {
-	if s.lastlist == listid {
-		return
-	}
-	s.lastlist = listid
-	if s.typ == split {
-		addstate(list, s.out[0], listid)
-		addstate(list, s.out[1], listid)
-		return
-	}
-	*list = append(*list, s)
-}
-
 // matchregex loops through the source input, and
 // steps through the state machine. Returns true
 // if there is a match, false if not.
@@ -164,7 +149,7 @@ func matchregex(start *state, source string) bool {
 		c := source[i]
 		next = d.next[c]
 		if next == nil {
-			list, listid = step(list, c, listid)
+			list, listid = step(list, len(source)-1, i, c, listid)
 			d.next[c] = getdfastate(&list)
 			next = d.next[c]
 		}
@@ -174,15 +159,45 @@ func matchregex(start *state, source string) bool {
 }
 
 // step computes the next list of states for a single character
-func step(list []*state, c byte, listid int) ([]*state, int) {
+func step(list []*state, maxindex, index int, c byte, listid int) ([]*state, int) {
 	nlist := []*state{}
 	listid++
 	for _, s := range list {
-		if s.typ == single && s.c.val == c || s.c.typ == charDot {
-			addstate(&nlist, s.out[0], listid)
+		if s.typ == single {
+			switch s.c.typ {
+			case charBegin:
+				if index == 0 || c == '\n' {
+					addstate(&nlist, s.out[0], listid)
+				}
+			case charEnd:
+				if index == maxindex || c == '\n' {
+					addstate(&nlist, s.out[0], listid)
+				}
+			case charDot:
+				addstate(&nlist, s.out[0], listid)
+			default:
+				if s.c.val == c {
+					addstate(&nlist, s.out[0], listid)
+				}
+			}
 		}
 	}
 	return nlist, listid
+}
+
+// addstate a new unique state to the list, following
+// any unlabeled arrows along the way.
+func addstate(list *[]*state, s *state, listid int) {
+	if s.lastlist == listid {
+		return
+	}
+	s.lastlist = listid
+	if s.typ == split {
+		addstate(list, s.out[0], listid)
+		addstate(list, s.out[1], listid)
+		return
+	}
+	*list = append(*list, s)
 }
 
 // getdfastate returns a dfa state for the corresponding list

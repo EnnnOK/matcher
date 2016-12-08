@@ -4,9 +4,9 @@ package main
 
 import "fmt"
 
-const _charType_name = "charNilcharEscapeLiteralcharLiteralcharDotcharStarcharConcatcharOr"
+const _charType_name = "charNilcharEscapeLiteralcharLiteralcharDotcharStarcharConcatcharOrcharBegincharEnd"
 
-var _charType_index = [...]uint8{0, 7, 24, 35, 42, 50, 60, 66}
+var _charType_index = [...]uint8{0, 7, 24, 35, 42, 50, 60, 66, 75, 82}
 
 func (i charType) String() string {
 	if i < 0 || i >= charType(len(_charType_index)-1) {
