@@ -15,10 +15,10 @@ caching the result after each state.
 Lexer is inspired by Rob Pike's lecture: "Lexical Scanning in Go"
 https://youtu.be/HxaD_trXwRE
 
-c	matches any literal character c
-.	matches any single character
-*	matches zero or more occurrences of the previous character
-|	matches the previous character or the next character
+		c	matches any literal character c
+		.	matches any single character
+		*	matches zero or more occurrences of the previous character
+		|	matches the previous character or the next character
 */
 package matcher
 

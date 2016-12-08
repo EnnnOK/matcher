@@ -1,10 +1,4 @@
 # matcher
-```
-c	matches any literal character c
-.	matches any single character
-*	matches zero or more occurrences of the previous character
-|	matches the previous character or the next character
-
 This regular expression package is inspired from Russ Cox's
 article "Regular Expression Matching Can Be Simple And Fast".
 https://swtch.com/~rsc/regexp/regexp1.html
@@ -21,4 +15,9 @@ Lexer is inspired by Rob Pike's lecture: "Lexical Scanning in Go"
 https://youtu.be/HxaD_trXwRE
 
 Documentation: https://godoc.org/github.com/smasher164/matcher
+```
+c	matches any literal character c
+.	matches any single character
+*	matches zero or more occurrences of the previous character
+|	matches the previous character or the next character
 ```
