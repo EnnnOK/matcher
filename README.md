@@ -19,4 +19,6 @@ caching the result after each state.
 
 Lexer is inspired by Rob Pike's lecture: "Lexical Scanning in Go"
 https://youtu.be/HxaD_trXwRE
+
+Documentation: https://godoc.org/github.com/smasher164/matcher
 ```
