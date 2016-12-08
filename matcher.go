@@ -1,10 +1,6 @@
-package main
+package matcher
 
-import (
-	"flag"
-	"fmt"
-	"os"
-)
+import "fmt"
 
 // c	matches any literal character c
 // .	matches any single character
@@ -91,10 +87,10 @@ func patch(out []ptr, start *state) {
 	}
 }
 
-// post2nfa loops over the postfix expression,
+// Post2nfa loops over the postfix expression,
 // and uses a stack of fragments to construct a
 // single nfa fragment representing the state machine.
-func post2nfa(postfix []char) (start *state) {
+func Post2nfa(postfix []char) (start *state) {
 	stack := []frag{}
 	push := func(f frag) {
 		stack = append(stack, f)
@@ -148,10 +144,10 @@ func addstate(list *[]*state, s *state, listid int) {
 	*list = append(*list, s)
 }
 
-// matchregex loops through the source input, and
+// Match loops through the source input, and
 // steps through the state machine. Returns true
 // if there is a match, false if not.
-func matchregex(start *state, source string) bool {
+func Match(start *state, source string) bool {
 	cacheddfa = make(map[*[]*state]*dfastate)
 
 	listid := 1
@@ -220,18 +216,4 @@ func printnfa(s *state) {
 	case match:
 		return
 	}
-}
-func main() {
-	flag.Parse()
-	regexp := flag.Arg(0)
-	source := flag.Arg(1)
-	if source == "" || regexp == "" {
-		fmt.Println("usage: matcher [REGEXP] [SOURCE]")
-		os.Exit(1)
-	}
-
-	chars := lex(regexp)
-	chars = postfix(chars)
-	nfa := post2nfa(chars)
-	fmt.Println(matchregex(nfa, source))
 }

@@ -1,4 +1,4 @@
-package main
+package matcher
 
 import (
 	"fmt"
@@ -118,9 +118,9 @@ func (l *lexer) next() bool {
 	return false
 }
 
-// lex parses the input regular expression, and returns
+// Lex parses the input regular expression, and returns
 // a sequence of concatenated character tokens.
-func lex(expression string) []char {
+func Lex(expression string) []char {
 	if len(expression) == 0 {
 		return []char{}
 	}
@@ -132,13 +132,13 @@ func lex(expression string) []char {
 	return l.chars[1:]
 }
 
-// postfix converts a sequence of character tokens
+// Postfix converts a sequence of character tokens
 // into postfix format. For instance, in order of
 // highest to lowest precedence:
 // A.B*		-->		AB*.
 // A.B.C	-->		AB.C.
 // A.B|C.D	-->		AB.CD.|
-func postfix(chars []char) []char {
+func Postfix(chars []char) []char {
 	output := []char{}
 	operator := []char{}
 	pop := func() *char {
