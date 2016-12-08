@@ -135,9 +135,9 @@ func Lex(expression string) []char {
 // Postfix converts a sequence of character tokens
 // into postfix format. For instance, in order of
 // highest to lowest precedence:
-// A.B*		-->		AB*.
-// A.B.C	-->		AB.C.
-// A.B|C.D	-->		AB.CD.|
+//		A.B*	-->		AB*.
+//		A.B.C	-->		AB.C.
+//		A.B|C.D	-->		AB.CD.|
 func Postfix(chars []char) []char {
 	output := []char{}
 	operator := []char{}
