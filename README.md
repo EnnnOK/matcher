@@ -21,3 +21,5 @@ c	matches any literal character c
 *	matches zero or more occurrences of the previous character
 |	matches the previous character or the next character
 ```
+
+Slides for presentation at http://go-talks.appspot.com/github.com/smasher164/matcher/pres/matcher.slide.
