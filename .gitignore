@@ -9,3 +9,7 @@
 !*.txt
 !.gitignore
 !*.md
+!*.png
+!*.jpg
+!*.svg
+!*.slide
