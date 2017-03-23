@@ -1,0 +1,309 @@
+matcher: A Regular Expression Engine
+Research and Implementation
+9 Dec 2016
+
+Akhil Indurti
+CSC 205 (Section 001M)
+Professor Annie Hui
+
+* About the package
+
+Written in the Go programming language.
+.image images/gopherbw.jpg 150 _
+
+Get the full package at [[https://github.com/smasher164/matcher][github.com/smasher164/matcher]].
+
+* Regular Expressions
+
+A notation for describing a set of strings.
+
+When a string is described by a regular expression, we say that it _matches_, or _accepts_ the string.
+
+*Syntax* (depending on the engine):
+
+	c   matches any literal character c
+	.   matches any single character
+	*   matches zero or more occurrences of the previous character
+	|   matches the previous character or the next character
+
+* Examples
+
+.play src/matchdemo.go /START OMIT/,/END OMIT/
+
+* Automata Theory
+
+* State Machines and Automaton
+
+Field of computer science that studies _abstract_machines_.
+
+One example is a *finite*state*machine*.
+
+.image images/nfa_abc.svg _ 500
+
+.image images/nfa_astarc.svg _ 400
+
+* State Machines and Automaton cont.
+
+.image images/nfa_aorb.svg _ 250
+
+* Deterministic vs Nondeterministic Finite Automata
+
+(simplified)
+
+- In a DFA, each of those arrows can point to one other state.
+- In an NFA, those arrows can point to multiple states at once
+- An NFA can be converted to a DFA through a process called _powerset_construction_.
+- For an NFA with a set of _n_ states, the corresponding DFA contains _2^n_ states.
+
+* Complexity
+- A DFA has an exponential increase in memory, but faster runtime.
+- An NFA computes the set of states at every transition, but takes less memory.
+
+*Applications*in:*
+
+- Text Parsing
+- Traffic Lights
+- Computer Vision
+- Game Programming
+- Network Hardware
+- (etc...)
+
+* Implementation
+*Lexing*and*Parsing*
+
+- Has applications everywhere in computer science, especially in compilers.
+
+	// Lex parses the input regular expression, and returns
+	// a sequence of concatenated character tokens.
+	func Lex(expression string) []char {
+		if len(expression) == 0 {
+			return []char{}
+		}
+		l := &lexer{
+			expression: expression,
+			chars:      make([]char, 0, len(expression)),
+		}
+		l.run()
+		return l.chars[1:]
+	}
+.play src/lexdemo.go /START OMIT/,/END OMIT/
+
+* Lexing and Parsing contd	
+	type charType int
+ 
+	type char struct {
+		typ charType
+		val byte
+	}
+ 
+	type lexer struct {
+		expression string    // the expression being parsed
+		pos        int       // advances position through the expression
+		chars      []char    // the sequence of tokens being modified
+	}
+* Lexing and Parsing contd.
+
+	func (l *lexer) run() {
+		for {
+			switch l.expression[l.pos] {
+			case '\\':
+				l.emit(charEscapeLiteral)
+			case '.':
+				l.emit(charDot)
+			case '*':
+				l.emit(charStar)
+			case '|':
+				l.emit(charOr)
+			default:
+				l.emit(charLiteral)
+			}
+			if !l.next() {
+				break
+			}
+		}
+	}
+* Lexing and Parsing contd.
+
+	// emit validates and appends the concatenated characters
+	// to to a slice.
+	func (l *lexer) emit(t charType) {
+		c := l.expression[l.pos]
+		if t == charEscapeLiteral {
+			if l.next() {
+				c = escape(l.expression[l.pos])
+			} else {
+				log.Fatalln("cannot have a trailing backslash in regular expression")
+			}
+		}
+		top := l.top()
+		if t == charStar {
+			if top == nil || (top.typ != charLiteral && top.typ != charDot) {
+				log.Fatalln("Preceding token to star is not quantifiable")
+			}
+		}
+		if t != charStar && t != charOr && (top == nil || top.typ != charOr) {
+			l.chars = append(l.chars, char{charConcat, '.'})
+		}
+		l.chars = append(l.chars, char{t, c})
+	}
+
+* Lexing and Parsing contd.
+
+Convert the expression into postfix form using Dijkstra's Shunting Yard algorithm. _(function_omitted_for_brevity)_
+
+.play src/postfixdemo.go /START OMIT/,/END OMIT/
+
+* Compile to NFA
+Loop through the postfix expression, and use a stack to operate on the topmost fragments.
+	
+	const (
+		match styp = iota
+		split
+		single
+	)
+	// A state represents a single node in the NFA
+	type state struct {
+		typ      styp     // the type of the state
+		c        char     // token that the state represents
+		out      []*state // pointers to the next state(s)
+		lastlist int      // allows partial scanning of the state lists
+	}
+	// A frag represents an NFA fragment, used to compile the postfix
+	// expression with a stack.
+	type frag struct {
+		start *state
+		out   []ptr
+	}
+
+* Compile to NFA contd.
+Uses Thompson construction.
+
+	func Post2nfa(postfix []char) (start *state) {
+		stack := []frag{}
+		push := func(f frag) {
+			stack = append(stack, f)
+		}
+		pop := func() (f frag) {
+			f, stack = stack[len(stack)-1], stack[:len(stack)-1]
+			return
+		}
+		for _, p := range postfix {
+			/*
+				A bunch of cases depending on the character
+			*/
+		}
+		e := pop()
+		patch(e.out, &state{typ: match})
+		return e.start
+	}
+
+* Compile to NFA contd.
+
+	switch p.typ {
+	default:
+		s := &state{typ: single, c: p, out: []*state{nil}}
+		out := []ptr{{s, 0}}
+		push(frag{s, out})
+	case charConcat:
+		e2 := pop()
+		e1 := pop()
+		patch(e1.out, e2.start)
+		push(frag{e1.start, e2.out})
+	case charStar:
+		e := pop()
+		s := &state{typ: split, out: []*state{e.start, nil}}
+		patch(e.out, s)
+		out := []ptr{{s, 1}}
+		push(frag{s, out})
+	case charOr:
+		e2 := pop()
+		e1 := pop()
+		s := &state{typ: split, out: []*state{e1.start, e2.start}}
+		out := append(e1.out, e2.out...)
+		push(frag{s, out})
+	}
+
+* Matching
+With a few functions omitted for brevity, matching is a simple loop over the source input, while computing the next set of states.
+
+	// previous version of match without DFA
+	func matchregex(start *state, source string) bool {
+		listid := 1
+		list := []*state{}
+		addstate(&list, start, listid)
+
+		for i := range source {
+			c := source[i]
+			list, listid = step(list, c, listid)
+		}
+		return ismatch(list)
+	}
+
+* Matching contd.
+Because Thompson construction effectively computes the powerset at every transition, we can cache each set of states.
+
+	// A dfastate is a cached list of states, containing pointers to
+	// dfastates for each possible character
+	type dfastate struct {
+		list *[]*state
+		next [256]*dfastate
+	}
+ 
+	// cacheddfa is a map that is keyed by pointers to
+	// a list of states, with the corresponding value of
+	// a dfastate. Avoids recomputation of each powerset.
+	var cacheddfa map[*[]*state]*dfastate
+
+* Matching contd.
+Match now checks the cache before computing the powerset, effectively giving us _O(mn)_ time with respect to cache lookup for the DFA.
+
+	func Match(start *state, source string) bool {
+		cacheddfa = make(map[*[]*state]*dfastate)
+
+		/* same as before */
+		d := getdfastate(&list)
+		var next *dfastate
+
+		for i := range source {
+			c := source[i]
+			next = d.next[c]
+			if next == nil {
+				list, listid = step(list, c, listid)
+				d.next[c] = getdfastate(&list)
+				next = d.next[c]
+			}
+			d = next
+		}
+		return ismatch(*d.list)
+	}
+
+* Lessons Learned
+- Theory and Implementation are very different.
+- Print good error messages.
+- Pointers are awesome!
+
+* Possible Improvements
+Add more features
+
+- assertions
+- groups
+- submatch extraction
+Performance
+
+- possible to avoid linked data structure?
+- bounded memory for the DFA
+
+* Generalizes to Computing
+- Hierarchy of Automata
+.image images/chomsky.png
+.caption (Fitch WT, Friederici AD)
+
+* Generalizes to Computing contd.
+- Principle of Hardware and Software Equivalence
+- Turing Completeness
+- Universal Turing Machine and the Von Neumann model
+.image images/Turing.jpg
+.caption (igem.org)
+
+* Thank You
+Questions?
